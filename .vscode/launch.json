@@ -1,6 +1,16 @@
 {
     "version": "0.2.0",
-    "configurations": [{
+    "configurations": [
+        {
+            "name": "Launch app.js",
+            "program": "${workspaceFolder}/tests/src/app.js",
+            "request": "launch",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "type": "pwa-node"
+        },
+        {
             "type": "node",
             "runtimeVersion": "12.15.0",
             "request": "launch",
