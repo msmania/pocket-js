@@ -85,7 +85,7 @@ export class SessionManager {
    * @param {string} chain - Name of the Blockchain.
    * @param {Configuration} configuration - Configuration object.
    * @param {Configuration} configuration - Configuration object.
-   * @param {Configuration} retryCount - Amount of retries performed 
+   * @param {Configuration} retryCount - Amount of retries performed
    * @returns {Promise}
    * @memberof SessionManager
    */
@@ -134,6 +134,37 @@ export class SessionManager {
       return await this.requestNewSession(pocketAAT, chain, configuration, attemptCount + 1, maxAttemptsAllowed)
     } else {
       return new Error("Unable to create a new session due to dispatchers failure.")
+    }
+  }
+
+  public async requestNewSessionWithHeight(
+    pocketAAT: PocketAAT,
+    chain: string,
+    heightStr: string,
+    configuration: Configuration
+  ): Promise<Session | Error> {
+    const dispatcher = this.routingTable.getRandomDispatcher()
+    if (typeGuard(dispatcher, Error)) {
+      return dispatcher
+    }
+
+    const rpc = new RPC(new HttpRpcProvider(dispatcher))
+    const header = new SessionHeader(
+      pocketAAT.applicationPublicKey, chain, BigInt(heightStr))
+    const dispatchRequest: DispatchRequest = new DispatchRequest(header)
+
+    const result = await rpc.client.dispatch(
+      dispatchRequest,
+      configuration.requestTimeOut,
+      configuration.rejectSelfSignedCertificates)
+    if (!typeGuard(result, DispatchResponse)) {
+      return result as RpcError
+    }
+
+    try {
+      return Session.fromJSON(JSON.stringify(result.toJSON()))
+    } catch (error) {
+      return error
     }
   }
 

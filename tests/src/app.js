@@ -1,5 +1,6 @@
 const pocketJS = require('../../dist');
-const { Pocket, Configuration, HttpRpcProvider, PocketAAT } = pocketJS;
+const { HTTPMethod, Pocket, Configuration, HttpRpcProvider, PocketAAT }
+  = pocketJS;
 const dispatchers = [
   "http://127.0.0.1:8082",
 ];
@@ -120,27 +121,24 @@ async function doRelay(counter, aat) {
   // );
 
   const resp = await pocketInstance.rpc().query.getHeight();
+  const height = resp.height % 4n == 1n ? resp.height - 1n : resp.height;
   const sess = await pocketInstance.sessionManager
-    .getCurrentSession(aat, blockchain, pocketInstance.configuration);
-  if (resp.height % 4n == 1n
-      && sess.sessionHeader.sessionBlockHeight < resp.height) {
-    //  sess = await pocketInstance.sessionManager
-    //   .requestNewSession(aat, blockchain, pocketInstance.configuration);
-    console.log(`height:${resp.height}`
-      + ` sess:${sess.sessionHeader.sessionBlockHeight}`);
-  }
-
-  const result = await pocketInstance.sendRelay(
+    .requestNewSessionWithHeight(aat, blockchain, height,
+    pocketInstance.configuration);
+  const result = await pocketInstance.sendRelayWithSession(
     JSON.stringify(queries[0]),
     blockchain,
     aat,
-    undefined,
-    {"Content-Type": "application/json", "Origin": "pocket-js"}
-  );
+    sess,
+    {"Content-Type": "application/json", "Origin": "pocket-js"},
+    HTTPMethod.POST,
+    "");
   if (result.payload) {
     console.log(result.payload);
   } else if (result.relayResponse) {
     console.log(result.relayResponse);
+  } else if (result.code) {
+    console.log(`Error ${result.code}: ${result.message}`);
   } else {
     console.log(JSON.stringify(result));
   }

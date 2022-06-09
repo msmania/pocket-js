@@ -256,7 +256,7 @@ export class Pocket {
       if (serviceNode === undefined) {
         return new RpcError("NA", "Could not determine a Service Node to submit this relay")
       }
-      
+
       // Assign session service node to the rpc instance
       const serviceProvider = new HttpRpcProvider(serviceNode.serviceURL)
       const rpc = new RPC(serviceProvider)
@@ -342,7 +342,7 @@ export class Pocket {
         if (
           rpcError.code === "60" || // InvalidBlockHeightError = errors.New("the block height passed is invalid")
           rpcError.code === "75" || // OutOfSyncRequestError = errors.New("the request block height is out of sync with the current block height")
-          rpcError.code === "14" 
+          rpcError.code === "14"
         ) {
           // Profiler
           profileResult = new ProfileResult("destroy_session")
@@ -455,9 +455,81 @@ export class Pocket {
     }
   }
 
+  public async sendRelayWithSession(
+    data: string,
+    blockchain: string,
+    pocketAAT: PocketAAT,
+    session: Session,
+    headers: RelayHeaders,
+    method: HTTPMethod,
+    path: string
+  ): Promise<RelayResponse | RpcError> {
+    const serviceNodeOrError = session.getSessionNode()
+    if (typeGuard(serviceNodeOrError, Error)) {
+      return RpcError.fromError(serviceNodeOrError)
+    }
+
+    const serviceNode = serviceNodeOrError as Node
+    if (serviceNode === undefined) {
+      return new RpcError("NA",
+        "Could not determine a Service Node to submit this relay")
+    }
+
+    const serviceProvider = new HttpRpcProvider(serviceNode.serviceURL)
+    const rpc = new RPC(serviceProvider)
+    const relayPayload = new RelayPayload(data, method, path, headers)
+
+    const clientAddressHex =
+      addressFromPublickey(Buffer.from(pocketAAT.clientPublicKey, 'hex'))
+      .toString("hex")
+    const isUnlocked = await this.keybase.isUnlocked(clientAddressHex)
+    if (!isUnlocked) {
+      return new RpcError("NA",
+        "Client account " + clientAddressHex + " for this AAT is not unlocked")
+    }
+
+    const relayMeta = new RelayMeta(session.sessionHeader.sessionBlockHeight)
+    const requestHash = new RequestHash(relayPayload, relayMeta)
+    const entropy = BigInt(Math.floor(Math.random() * 99999999999999999))
+    const proofBytes = RelayProof.bytes(
+      entropy,
+      session.sessionHeader.sessionBlockHeight,
+      serviceNode.publicKey,
+      blockchain,
+      pocketAAT,
+      requestHash
+    )
+    const signatureOrError =
+      await this.keybase.signWithUnlockedAccount(clientAddressHex, proofBytes)
+    if (typeGuard(signatureOrError, Error)) {
+      return new RpcError("NA",
+        "Error signing Relay proof: "+signatureOrError.message)
+    }
+
+    const signature = signatureOrError as Buffer
+    const signatureHex = signature.toString("hex")
+    const relayProof = new RelayProof(
+      entropy,
+      session.sessionHeader.sessionBlockHeight,
+      serviceNode.publicKey,
+      blockchain,
+      pocketAAT,
+      signatureHex,
+      requestHash
+    )
+
+    const relay = new RelayRequest(relayPayload, relayMeta, relayProof)
+    return rpc.client.relay(
+      relay,
+      this.configuration.validateRelayResponses,
+      this.configuration.requestTimeOut,
+      this.configuration.rejectSelfSignedCertificates
+    )
+  }
+
   /**
    * Creates an ITransactionSender given a private key
-   * @param {Buffer | string} privateKey 
+   * @param {Buffer | string} privateKey
    * @returns {ITransactionSender} - Interface with all the possible MsgTypes in a Pocket Network transaction and a function to submit the transaction to the network.
    * @memberof Pocket
    */
@@ -516,7 +588,7 @@ export class Pocket {
     }
   }
 
-  
+
 }
 
 export * from "@pokt-network/aat-js"
