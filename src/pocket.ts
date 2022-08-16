@@ -460,21 +460,11 @@ export class Pocket {
     blockchain: string,
     pocketAAT: PocketAAT,
     session: Session,
+    serviceNode: Node,
     headers: RelayHeaders,
     method: HTTPMethod,
     path: string
   ): Promise<RelayResponse | RpcError> {
-    const serviceNodeOrError = session.getSessionNode()
-    if (typeGuard(serviceNodeOrError, Error)) {
-      return RpcError.fromError(serviceNodeOrError)
-    }
-
-    const serviceNode = serviceNodeOrError as Node
-    if (serviceNode === undefined) {
-      return new RpcError("NA",
-        "Could not determine a Service Node to submit this relay")
-    }
-
     const serviceProvider = new HttpRpcProvider(serviceNode.serviceURL)
     const rpc = new RPC(serviceProvider)
     const relayPayload = new RelayPayload(data, method, path, headers)
